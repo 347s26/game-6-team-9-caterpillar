@@ -1,0 +1,6 @@
+#! /usr/bin/bash
+python3 manage.py makemigrations;
+python3 manage.py migrate;
+
+# python manage.py shell --no-input superuser
+# data migrations
