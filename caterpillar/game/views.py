@@ -75,8 +75,11 @@ def make_move(request, game_id):
 
     if is_valid:
         Node.objects.create(game=game, x=new_x, y=new_y, order=new_order)
-        if change_turn:
-            game.current_turn = 2 if game.current_turn == 1 else 1
+        # this should fix the turn switching bug where the turn would switch even if the move was invalid -Alex
+        if game.current_turn == 1:
+            game.current_turn = 2
+        else:
+            game.current_turn = 1
         game.save()
         
         return JsonResponse({
