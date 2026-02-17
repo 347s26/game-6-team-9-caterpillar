@@ -1,0 +1,191 @@
+<!-- caterpillar/game/templates/game/board.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Caterpillar Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #cbd5e1;
+            cursor: pointer;
+            position: relative;
+            z-index: 10;
+            margin: 13px;
+            transition: all 0.2s;
+        }
+
+        .dot:hover {
+            background: #94a3b8;
+            transform: scale(1.4);
+        }
+
+        .dot.active {
+            background: #1e293b;
+        }
+
+        .dot.pending {
+            background: #fca5a5;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.2);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .grid-container {
+            display: grid;
+            position: relative;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .line {
+            position: absolute;
+            height: 6px;
+            z-index: 5;
+            pointer-events: none;
+            border-radius: 3px;
+        }
+
+        .line-red {
+            background-color: #ef4444;
+        }
+
+        .line-green {
+            background-color: #22c55e;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 min-h-screen flex flex-col items-center py-12">
+    <div class="mb-10 text-center">
+        <h1 class="text-5xl font-black text-slate-900 mb-4 tracking-tight">CATERPILLAR</h1>
+        <div id="status-bar" class="text-xl font-bold px-6 py-3 rounded-full shadow-md">Loading...</div>
+        <p id="instruction-text" class="mt-4 text-slate-500 font-medium"></p>
+    </div>
+
+    <div id="board" class="grid-container"
+        style="grid-template-columns: repeat({{ game.width }}, 40px); grid-template-rows: repeat({{ game.height }}, 40px);">
+    </div>
+
+    <div class="mt-12 flex gap-4">
+        <button onclick="resetGame()"
+            class="bg-slate-900 text-white font-bold px-8 py-3 rounded-lg hover:bg-slate-800 transition">Restart
+            Game</button>
+    </div>
+
+    <script>
+        const gameId = {{ game.id }};
+        const width = {{ game.width }}, height = {{ game.height }};
+        let nodes = [], currentTurn = 1, isPendingFirst = false;
+
+        function getCookie(name) {
+            let v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+            return v ? v[2] : null;
+        }
+
+        async function updateBoard() {
+            const res = await fetch(`/move/${gameId}/`);
+            const data = await res.json();
+            nodes = data.nodes;
+            currentTurn = data.current_turn;
+            isPendingFirst = (nodes.length === 1);
+
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'dot';
+                    if (nodes.find(n => n.x === x && n.y === y)) dot.classList.add('active');
+                    if (isPendingFirst && nodes[0].x === x && nodes[0].y === y) dot.classList.add('pending');
+                    dot.onclick = () => handleMove(x, y);
+                    board.appendChild(dot);
+                }
+            }
+
+            // Draw segments
+            for (let i = 0; i < nodes.length - 1; i++) {
+                const segmentColor = (i % 2 === 0) ? 'line-red' : 'line-green';
+                drawLine(nodes[i], nodes[i + 1], segmentColor);
+            }
+
+            const bar = document.getElementById('status-bar');
+            const inst = document.getElementById('instruction-text');
+
+            if (currentTurn === 1) {
+                bar.innerText = "PLAYER 1'S TURN (RED)";
+                bar.className = "text-xl font-bold px-6 py-3 rounded-full shadow-md bg-red-500 text-white";
+                inst.innerText = isPendingFirst ? "Select an adjacent dot to finish your first line." : "Select two dots to draw your first line.";
+            } else {
+                bar.innerText = "PLAYER 2'S TURN (GREEN)";
+                bar.className = "text-xl font-bold px-6 py-3 rounded-full shadow-md bg-green-500 text-white";
+                inst.innerText = "Join one end of the line to a new dot.";
+            }
+        }
+
+        function drawLine(n1, n2, colorClass) {
+            const board = document.getElementById('board');
+            const line = document.createElement('div');
+            line.className = `line ${colorClass}`;
+
+            // Grid cell is 40px. Center is at 20px. 
+            // Container has 20px padding.
+            const padding = 20;
+            const cellSize = 40;
+            const centerOffset = 20;
+
+            const x1 = n1.x * cellSize + centerOffset + padding;
+            const y1 = n1.y * cellSize + centerOffset + padding;
+            const x2 = n2.x * cellSize + centerOffset + padding;
+            const y2 = n2.y * cellSize + centerOffset + padding;
+
+            const len = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+            const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+
+            line.style.width = `${len}px`;
+            line.style.left = `${x1}px`;
+            line.style.top = `${y1 - 3}px`; // Subtract half of the line height (6px/2) to center it
+            line.style.transform = `rotate(${angle}deg)`;
+            line.style.transformOrigin = "0 50%";
+
+            board.appendChild(line);
+        }
+
+        async function handleMove(x, y) {
+            const res = await fetch(`/move/${gameId}/`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({ x, y })
+            });
+            const result = await res.json();
+            if (result.success) {
+                updateBoard();
+            } else {
+                console.error(result.error);
+            }
+        }
+
+        async function resetGame() { await fetch(`/reset/${gameId}/`); updateBoard(); }
+        window.onload = updateBoard;
+    </script>
+</body>
+
+</html>
