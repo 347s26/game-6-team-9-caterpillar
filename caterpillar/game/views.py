@@ -63,13 +63,11 @@ def make_move(request, game_id):
         
         if is_adjacent(head.x, head.y, new_x, new_y):
             is_valid = True
-            for n in nodes:
-                n.order += 1
-                n.save()
-            new_order = 0
+            new_order = head.order - 1
+            
         elif is_adjacent(tail.x, tail.y, new_x, new_y):
             is_valid = True
-            new_order = num_nodes
+            new_order = tail.order + 1
         else:
             return JsonResponse({'error': 'Must connect to one of the ends of the line'}, status=400)
 
